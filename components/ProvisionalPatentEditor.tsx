@@ -2,6 +2,7 @@
 
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { Markdown } from "tiptap-markdown";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ export default function ProvisionalPatentEditor({
   const [isGenerating, setIsGenerating] = useState(false);
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [StarterKit, Markdown],
     content: "<p>Start typing your provisional patent description here...</p>",
     editorProps: {
       attributes: {
@@ -56,7 +57,7 @@ export default function ProvisionalPatentEditor({
       }
 
       // Clear the editor first
-      editor?.commands.setContent("");
+      editor?.commands.clearContent();
 
       // Read the streaming response
       const reader = response.body?.getReader();
@@ -74,16 +75,9 @@ export default function ProvisionalPatentEditor({
 
         const chunk = decoder.decode(value);
         accumulatedText += chunk;
-
-        // Update editor with accumulated text
-        // Convert plain text to HTML paragraphs
-        const htmlContent = accumulatedText
-          .split("\n\n")
-          .map((para) => `<p>${para.replace(/\n/g, "<br>")}</p>`)
-          .join("");
-
-        editor?.commands.setContent(htmlContent);
       }
+
+      editor?.commands.setContent(accumulatedText);
 
       toast.success("Patent description generated successfully!");
     } catch (error) {
