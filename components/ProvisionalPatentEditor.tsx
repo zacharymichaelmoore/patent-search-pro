@@ -109,7 +109,7 @@ export default function ProvisionalPatentEditor({
           <Input
             id="prompt"
             type="text"
-            placeholder="E.g., A smart water bottle that tracks hydration..."
+            placeholder="Enter your invention description"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             className="flex-1"
@@ -138,7 +138,7 @@ export default function ProvisionalPatentEditor({
       </div>
 
       {/* TipTap Editor */}
-      <div className="border rounded-lg bg-white shadow-sm">
+      <div className="border rounded-lg bg-white shadow-sm h-[50vh] overflow-scroll">
         <EditorContent editor={editor} />
       </div>
     </div>

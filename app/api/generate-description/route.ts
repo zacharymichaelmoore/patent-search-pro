@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
     const systemPrompt = `You are an expert patent attorney specializing in provisional patent applications. 
 Your task is to transform a brief invention description into a comprehensive, professionally-written provisional patent description.
