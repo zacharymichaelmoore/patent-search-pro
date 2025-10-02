@@ -6,15 +6,36 @@ import ProvisionalPatentEditor from "@/components/ProvisionalPatentEditor";
 import SearchTermChips from "@/components/SearchTermChips";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { LogOut } from "lucide-react";
+
+type TermCategory = "deviceTerms" | "technologyTerms" | "subjectTerms";
+
+interface SearchTermsState {
+  deviceTerms: string[];
+  technologyTerms: string[];
+  subjectTerms: string[];
+}
 
 export default function Home() {
+  const [prompt, setPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [hasGeneratedDescription, setHasGeneratedDescription] = useState(false);
+
+  const [relatedTermsCache, setRelatedTermsCache] = useState<
+    Record<string, string[]>
+  >({});
+  const [isPreloading, setIsPreloading] = useState(false);
+
   const [editorContent, setEditorContent] = useState("");
-  const [debouncedContent] = useDebounce(editorContent, 2000); // 2 second debounce
-  const [searchTerms, setSearchTerms] = useState({
+  const [debouncedContent] = useDebounce(editorContent, 2000);
+
+  const [searchTerms, setSearchTerms] = useState<SearchTermsState>({
     deviceTerms: [],
     technologyTerms: [],
     subjectTerms: [],
   });
+
   const [isExtractingTerms, setIsExtractingTerms] = useState(false);
 
   const hasSearchTerms =
@@ -24,94 +45,257 @@ export default function Home() {
 
   // Extract terms whenever debounced content changes
   useEffect(() => {
-    const extractTerms = async () => {
+    const extractAndPreloadTerms = async () => {
       if (!debouncedContent || debouncedContent.trim().length < 20) {
-        // Reset terms if content is too short
         setSearchTerms({
           deviceTerms: [],
           technologyTerms: [],
           subjectTerms: [],
         });
+        setRelatedTermsCache({}); // Clear cache on reset
         return;
       }
 
       setIsExtractingTerms(true);
+      let newSearchTerms: SearchTermsState | null = null;
       try {
         const response = await fetch("/api/extract-terms", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ documentText: debouncedContent }),
         });
 
-        if (!response.ok) {
-          throw new Error("Failed to extract terms");
-        }
+        if (!response.ok) throw new Error("Failed to extract terms");
 
-        const terms = await response.json();
-        setSearchTerms(terms);
+        newSearchTerms = await response.json();
+        setSearchTerms(newSearchTerms!);
       } catch (error) {
         console.error("Error extracting terms:", error);
         toast.error("Failed to extract search terms");
       } finally {
         setIsExtractingTerms(false);
       }
+
+      if (newSearchTerms) {
+        setIsPreloading(true);
+        const allTerms = [
+          ...newSearchTerms.deviceTerms,
+          ...newSearchTerms.technologyTerms,
+          ...newSearchTerms.subjectTerms,
+        ];
+
+        // The functional update to setRelatedTermsCache will use the latest state,
+        // so we don't need a stale closure over relatedTermsCache here.
+        const termsToFetch = allTerms.filter(
+          (term) => !relatedTermsCache[term]
+        );
+
+        if (termsToFetch.length === 0) {
+          setIsPreloading(false);
+          return;
+        }
+
+        try {
+          const promises = termsToFetch.map((term) =>
+            fetch("/api/get-related-terms", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ term }),
+            }).then((res) => res.json().then((data) => ({ term, data })))
+          );
+
+          const results = await Promise.all(promises);
+
+          setRelatedTermsCache((prevCache) => {
+            const newCache = { ...prevCache };
+            results.forEach(({ term, data }) => {
+              newCache[term] = data;
+            });
+            return newCache;
+          });
+        } catch (error) {
+          console.error("Error preloading related terms:", error);
+        } finally {
+          setIsPreloading(false);
+        }
+      }
     };
 
-    extractTerms();
+    extractAndPreloadTerms();
+    // THIS IS THE CORRECTED LINE:
+    // Only run this effect when the source text changes.
   }, [debouncedContent]);
+
+  const handleGenerateDescription = async () => {
+    if (!prompt.trim()) return;
+
+    setIsGenerating(true);
+    setEditorContent("");
+
+    try {
+      const response = await fetch("/api/generate-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!response.ok || !response.body) throw new Error("Streaming failed");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setEditorContent((prev) => prev + decoder.decode(value));
+      }
+
+      setHasGeneratedDescription(true);
+      toast.success("Description generated successfully!");
+    } catch (error) {
+      console.error("Error generating description:", error);
+      toast.error("Failed to generate description.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleExit = () => {
+    setHasGeneratedDescription(false);
+    setPrompt("");
+    setEditorContent("");
+    setSearchTerms({ deviceTerms: [], technologyTerms: [], subjectTerms: [] });
+    setRelatedTermsCache({});
+    toast.info("Session reset.");
+  };
+
+  const handleFileUpload = () => {
+    toast.info("File upload feature will be available soon.");
+  };
+
+  const handleAddTerm = (term: string, category: TermCategory) => {
+    setSearchTerms((prevTerms) => {
+      const currentCategoryTerms = prevTerms[category];
+      if (currentCategoryTerms.includes(term)) {
+        toast.info(`"${term}" is already in the list.`);
+        return prevTerms;
+      }
+      return {
+        ...prevTerms,
+        [category]: [...currentCategoryTerms, term],
+      };
+    });
+  };
 
   const handleBeginSearch = () => {
     toast.info("Prior art search feature coming soon!");
     console.log("Beginning prior art search with terms:", searchTerms);
   };
 
+  const handleRemoveTerm = (termToRemove: string, category: TermCategory) => {
+    setSearchTerms((prevTerms) => {
+      const currentCategoryTerms = prevTerms[category];
+      return {
+        ...prevTerms,
+        [category]: currentCategoryTerms.filter(
+          (term) => term !== termToRemove
+        ),
+      };
+    });
+    toast.error(`"${termToRemove}" removed.`);
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header */}
+    <div className="flex-col bg-gray-50">
       <header className="border-b bg-white shadow-sm">
-        <div className="container mx-auto px-6 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">
-            AI Patent Assistant
-          </h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Draft your provisional patent and discover prior art
-          </p>
+        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              AI Patent Assistant
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Draft your provisional patent and discover prior art
+            </p>
+          </div>
+          {hasGeneratedDescription && (
+            <Button onClick={handleExit} variant="outline">
+              <LogOut className="mr-2 h-4 w-4" />
+              Exit
+            </Button>
+          )}
         </div>
       </header>
 
-      {/* Main Content - Two Column Layout */}
       <main className="flex-1 container mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-full">
-          {/* Left Panel - Patent Editor (60% width on large screens) */}
-          <div className="lg:col-span-3 bg-white rounded-lg border shadow-sm p-6">
-            <div className="h-full">
-              <h2 className="text-lg font-semibold mb-4">
-                Provisional Patent Description
-              </h2>
-              <ProvisionalPatentEditor onContentChange={setEditorContent} />
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <div className="lg:col-span-3 bg-white rounded-lg border shadow-sm p-6 flex flex-col">
+            {!hasGeneratedDescription && (
+              <>
+                <h2 className="text-lg font-semibold mb-4">
+                  Provisional Patent Description
+                </h2>
+                <div className="space-y-4 mb-4">
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="prompt"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Describe your invention
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="prompt"
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        placeholder="e.g., a smart hamster with a neural implant"
+                        disabled={isGenerating}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleGenerateDescription();
+                        }}
+                      />
+                      <Button
+                        onClick={handleGenerateDescription}
+                        disabled={!prompt.trim() || isGenerating}
+                      >
+                        {isGenerating
+                          ? "Generating..."
+                          : "Generate Description"}
+                      </Button>
+                    </div>
+                  </div>
+                  <Button variant="outline" onClick={handleFileUpload}>
+                    Upload File
+                  </Button>
+                </div>
+              </>
+            )}
+
+            <div className="flex-1">
+              <ProvisionalPatentEditor
+                content={editorContent}
+                onContentChange={setEditorContent}
+              />
             </div>
           </div>
 
-          {/* Right Panel - Search Terms (40% width on large screens) */}
-          <div className="lg:col-span-2 bg-white rounded-lg border shadow-sm p-6 flex flex-col">
+          <div className="lg:col-span-2 bg-white rounded-lg border shadow-sm p-6 flex flex-col h-max">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Extracted Search Terms</h2>
-              {isExtractingTerms && (
+              {(isExtractingTerms || isPreloading) && (
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-gray-600 rounded-full"></div>
-                  Analyzing...
+                  {isExtractingTerms ? "Analyzing..." : "Fetching synonyms..."}
                 </div>
               )}
             </div>
-
-            {/* Search Terms Component */}
             <div className="flex-1 mb-4">
-              <SearchTermChips terms={searchTerms} />
+              <SearchTermChips
+                terms={searchTerms}
+                onAddTerm={handleAddTerm}
+                onRemoveTerm={handleRemoveTerm}
+                relatedTermsCache={relatedTermsCache}
+                isPreloading={isPreloading}
+              />
             </div>
-
-            {/* Main Control Button */}
             <Button
               onClick={handleBeginSearch}
               disabled={!hasSearchTerms}

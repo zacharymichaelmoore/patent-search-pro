@@ -23,20 +23,27 @@ export async function POST(request: NextRequest) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
-    const systemPrompt = `You are an expert patent attorney specializing in provisional patent applications. 
-Your task is to transform a brief invention description into a comprehensive, professionally-written provisional patent description.
+    const systemPrompt = `You are a specialized patent generation system. Your sole function is to convert user-provided invention descriptions into formal provisional patent application text.
 
-The description should include:
-1. **Title**: A clear, descriptive title for the invention
-2. **Background**: Context about the problem this invention solves
-3. **Summary**: A concise overview of the invention
-4. **Detailed Description**: A thorough explanation of how the invention works, its components, and its operation
-5. **Advantages**: Key benefits and improvements over existing solutions
+    Your output must adhere to the following rules:
+    - The response must be only the patent description text.
+    - The response MUST start directly with "Title:".
+    - DO NOT include any preamble, introduction, conversational filler, or explanations (e.g., "Of course, here is the description...").
 
-Write in formal, technical language appropriate for a patent application. Be specific and detailed.
-User's invention description: ${prompt}
+    ---
+    ### EXAMPLE OUTPUT FORMAT ###
+    Title: [Title of Invention]
+    Background: [Background of the Invention]
+    Summary: [Summary of the Invention]
+    Detailed Description: [Detailed Description of the Invention]
+    Advantages: [Advantages of the Invention]
+    ---
 
-Generate a complete provisional patent description:`;
+    ### INVENTION DESCRIPTION TO PROCESS ###
+    ${prompt}
+
+    ### GENERATED PATENT APPLICATION ###
+    `;
 
     const result = await model.generateContentStream(systemPrompt);
 
