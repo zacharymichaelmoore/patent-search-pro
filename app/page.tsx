@@ -101,25 +101,30 @@ export default function Home() {
         }
 
         try {
-          const promises = termsToFetch.map((term) =>
-            fetch("/api/get-related-terms", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ term }),
-            }).then((res) => res.json().then((data) => ({ term, data })))
-          );
-
-          const results = await Promise.all(promises);
-
-          setRelatedTermsCache((prevCache) => {
-            const newCache = { ...prevCache };
-            results.forEach(({ term, data }) => {
-              newCache[term] = data;
-            });
-            return newCache;
+          // 1. Make a SINGLE API call with the entire array of terms.
+          const response = await fetch("/api/get-related-terms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // Send the whole array in the body under the key "terms".
+            body: JSON.stringify({ terms: termsToFetch }),
           });
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch related terms batch");
+          }
+
+          // The response will be an object like { term1: [...], term2: [...] }.
+          const newRelatedTerms = await response.json();
+
+          // 2. Update the cache with all the new terms at once.
+          setRelatedTermsCache((prevCache) => ({
+            ...prevCache,
+            ...newRelatedTerms,
+          }));
         } catch (error) {
           console.error("Error preloading related terms:", error);
+          // Optionally, add a toast notification for the user.
+          toast.error("Could not fetch related terms.");
         } finally {
           setIsPreloading(false);
         }

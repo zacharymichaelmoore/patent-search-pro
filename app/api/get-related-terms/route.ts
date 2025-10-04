@@ -1,43 +1,73 @@
-// app/api/get-related-terms/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-// Make sure to set your GEMINI_API_KEY in your .env.local file
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-
-export async function POST(request: Request) {
+// This function will be called for each individual term in the batch.
+async function getSynonymsForTerm(model: any, term: string): Promise<string[]> {
   try {
-    const { term } = await request.json();
+    const prompt = `Generate 5-7 technical synonyms or closely related phrases for the patent search term: "${term}".
+    Your response MUST be a single, valid JSON array of strings and nothing else.
+    Do not include the original term in the list. Do not include markdown or explanations.`;
 
-    if (!term) {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    // Use a robust regex to find the JSON array within the response,
+    // in case the model adds any conversational text.
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      // Successfully parsed the JSON array from the response.
+      return JSON.parse(jsonMatch[0]);
+    } else {
+      console.warn(
+        `Could not parse a valid JSON array from Gemini response for term: "${term}". Response was: ${text}`
+      );
+      return []; // Return an empty array if parsing fails for this term.
+    }
+  } catch (error) {
+    console.error(`Gemini API call failed for term "${term}":`, error);
+    // If the API call itself fails, return an empty array for this term.
+    return [];
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
       return NextResponse.json(
-        { error: "Search term is required" },
+        { error: "GEMINI_API_KEY is not configured" },
+        { status: 500 }
+      );
+    }
+
+    // 1. Expect an array of terms in the request body, not a single term.
+    const { terms } = await request.json();
+
+    if (!terms || !Array.isArray(terms) || terms.length === 0) {
+      return NextResponse.json(
+        { error: "A non-empty array of 'terms' is required" },
         { status: 400 }
       );
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" }); // Using a valid and current model name.
 
-    const prompt = `
-      Given the technical or patent-related search term '${term}', generate a list of 5 to 7 closely related technical synonyms or alternative phrases that could be used in a patent search.
-      Return the result as a clean JSON array of strings.
-      For example, for the term 'photovoltaic cell', you might return: ["solar cell", "solar panel", "PV module", "photoelectric cell", "solar energy converter"].
-      Do not include the original term in the list. Only return the JSON array itself, without any surrounding text or markdown.
-    `;
+    const allRelatedTerms: Record<string, string[]> = {};
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    // 2. Process the array of terms SEQUENTIALLY on the backend to avoid rate limiting.
+    for (const term of terms) {
+      const synonyms = await getSynonymsForTerm(model, term);
+      allRelatedTerms[term] = synonyms;
+    }
 
-    // Clean up the response to ensure it's valid JSON
-    const jsonArrayString = text.replace(/```json|```/g, "").trim();
-    const relatedTerms = JSON.parse(jsonArrayString);
-
-    return NextResponse.json(relatedTerms);
+    // 3. Return a single JSON object containing all the results.
+    // The shape is { "term1": ["syn1", "syn2"], "term2": ["syn3", "syn4"] }
+    return NextResponse.json(allRelatedTerms);
   } catch (error) {
-    console.error("Error generating related terms:", error);
+    console.error("An unexpected error occurred in get-related-terms:", error);
     return NextResponse.json(
-      { error: "Failed to generate related terms" },
+      { error: "Failed to process the batch of related terms" },
       { status: 500 }
     );
   }
