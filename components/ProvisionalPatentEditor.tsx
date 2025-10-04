@@ -4,9 +4,14 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { useEffect } from "react";
-// Import the extension logic and rename it to avoid conflicts
-import BubbleMenu from "@tiptap/extension-bubble-menu";
 import EditorToolbar from "./EditorToolbar";
+
+// Define a type for the editor's storage when using tiptap-markdown
+type EditorStorage = {
+  markdown: {
+    getMarkdown: () => string;
+  };
+};
 
 interface ProvisionalPatentEditorProps {
   content: string;
@@ -20,7 +25,6 @@ export default function ProvisionalPatentEditor({
   const editor = useEditor({
     extensions: [
       StarterKit,
-
       Markdown.configure({
         html: true,
         linkify: true,
@@ -36,15 +40,19 @@ export default function ProvisionalPatentEditor({
     },
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
-      const markdown = (editor.storage as any).markdown.getMarkdown();
+      // Use the 'as unknown as EditorStorage' pattern
+      const markdown = (
+        editor.storage as unknown as EditorStorage
+      ).markdown.getMarkdown();
       onContentChange(markdown);
     },
   });
 
   useEffect(() => {
     if (editor) {
+      // Use the same pattern here
       const editorContentAsMarkdown = (
-        editor.storage as any
+        editor.storage as unknown as EditorStorage
       ).markdown.getMarkdown();
       if (content !== editorContentAsMarkdown) {
         editor.commands.setContent(content, { emitUpdate: false });

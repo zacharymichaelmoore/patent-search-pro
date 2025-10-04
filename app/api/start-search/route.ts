@@ -2,9 +2,18 @@ import { Storage } from "@google-cloud/storage";
 import { NextRequest } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 
+type SearchResult = {
+  score: number | string;
+  level: string;
+  title: string;
+  abstract: string;
+  filingDate: string;
+  reason: string;
+};
+
 export async function POST(request: NextRequest) {
   try {
-    const { searchTerms, userDescription } = await request.json();
+    const { userDescription } = await request.json();
 
     if (!userDescription) {
       return Response.json(
@@ -17,24 +26,21 @@ export async function POST(request: NextRequest) {
     const VM_URL = process.env.PATENT_SEARCH_VM_URL; // e.g., http://YOUR_VM_IP:8080
 
     if (!VM_URL) {
-      return Response.json(
-        { error: "VM URL not configured" },
-        { status: 500 }
-      );
+      return Response.json({ error: "VM URL not configured" }, { status: 500 });
     }
 
     console.log(`[${jobId}] Calling VM search service...`);
 
     // Call VM's search API
     const searchResponse = await fetch(`${VM_URL}/api/search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userDescription,
-        topK: 100
+        topK: 100,
       }),
       // 5 minute timeout
-      signal: AbortSignal.timeout(300000)
+      signal: AbortSignal.timeout(300000),
     });
 
     if (!searchResponse.ok) {
@@ -42,7 +48,9 @@ export async function POST(request: NextRequest) {
     }
 
     const results = await searchResponse.json();
-    console.log(`[${jobId}] Got ${results.count} results in ${results.durationMs}ms`);
+    console.log(
+      `[${jobId}] Got ${results.count} results in ${results.durationMs}ms`
+    );
 
     // Convert to CSV
     const csv = resultsToCSV(results.results);
@@ -59,8 +67,8 @@ export async function POST(request: NextRequest) {
     const fileName = `${jobId}_report.csv`;
 
     await bucket.file(fileName).save(csv, {
-      contentType: 'text/csv',
-      metadata: { cacheControl: 'no-cache' },
+      contentType: "text/csv",
+      metadata: { cacheControl: "no-cache" },
     });
 
     console.log(`[${jobId}] Uploaded results`);
@@ -70,9 +78,8 @@ export async function POST(request: NextRequest) {
       jobId,
       message: "Search complete",
       count: results.count,
-      durationSeconds: Math.round(results.durationMs / 1000)
+      durationSeconds: Math.round(results.durationMs / 1000),
     });
-
   } catch (error) {
     console.error("Search error:", error);
     return Response.json(
@@ -82,24 +89,28 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function resultsToCSV(results: any[]) {
+function resultsToCSV(results: SearchResult[]) {
   const headers = [
-    'Risk Score',
-    'Risk Level',
-    'Title',
-    'Abstract',
-    'Filing Date',
-    'Reasoning'
+    "Risk Score",
+    "Risk Level",
+    "Title",
+    "Abstract",
+    "Filing Date",
+    "Reasoning",
   ];
 
-  const rows = results.map(r => [
-    r.score || 'N/A',
-    r.level || 'Unknown',
-    r.title || '',
-    r.abstract || '',
-    r.filingDate || '',
-    r.reason || ''
-  ].map(f => `"${String(f).replace(/"/g, '""')}"`).join(','));
+  const rows = results.map((r) =>
+    [
+      r.score || "N/A",
+      r.level || "Unknown",
+      r.title || "",
+      r.abstract || "",
+      r.filingDate || "",
+      r.reason || "",
+    ]
+      .map((f) => `"${String(f).replace(/"/g, '""')}"`)
+      .join(",")
+  );
 
-  return [headers.join(','), ...rows].join('\n');
+  return [headers.join(","), ...rows].join("\n");
 }

@@ -58,9 +58,7 @@ export async function GET(request: NextRequest) {
 
     // Get file metadata
     const [metadata] = await file.getMetadata();
-    const fileSizeKB = Math.round(
-      parseInt(metadata.size || "0") / 1024
-    );
+    const fileSizeKB = Math.round(Number(metadata.size || 0) / 1024);
 
     return Response.json({
       status: "complete",
