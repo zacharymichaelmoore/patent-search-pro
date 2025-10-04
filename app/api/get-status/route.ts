@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     const fileSizeKB = Math.round(Number(metadata.size || 0) / 1024);
 
     return Response.json({
-      status: "complete",
+      status: "completed",
       downloadUrl: signedUrl,
       fileName,
       fileSize: `${fileSizeKB} KB`,
