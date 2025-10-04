@@ -129,7 +129,7 @@ export default function Home() {
     extractAndPreloadTerms();
     // THIS IS THE CORRECTED LINE:
     // Only run this effect when the source text changes.
-  }, [debouncedContent]);
+  }, [debouncedContent, relatedTermsCache]);
 
   const handleGenerateDescription = async () => {
     if (!prompt.trim()) return;

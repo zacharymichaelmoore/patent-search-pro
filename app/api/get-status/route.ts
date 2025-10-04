@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     if (process.env.GOOGLE_CLOUD_CREDENTIALS) {
       try {
         credentials = JSON.parse(process.env.GOOGLE_CLOUD_CREDENTIALS);
-      } catch (e) {
+      } catch (_e) {
         console.error("Failed to parse GOOGLE_CLOUD_CREDENTIALS");
       }
     }
