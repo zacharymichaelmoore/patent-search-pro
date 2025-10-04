@@ -7,7 +7,7 @@ import { Download, ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface StatusResponse {
-  status: "pending" | "complete";
+  status: "processing" | "completed" | "failed" | "not_found";
   downloadUrl?: string;
   fileName?: string;
   fileSize?: string;
@@ -29,7 +29,7 @@ export default function SearchStatusPage() {
     const checkStatus = async () => {
       try {
         const response = await fetch(`/api/get-status?jobId=${jobId}`);
-        
+
         if (!response.ok) {
           throw new Error("Failed to check status");
         }
@@ -37,7 +37,7 @@ export default function SearchStatusPage() {
         const data: StatusResponse = await response.json();
         setStatus(data);
 
-        if (data.status === "complete") {
+        if (data.status === "completed") {
           setIsPolling(false);
           toast.success("Patent search completed!");
         }
@@ -101,7 +101,7 @@ export default function SearchStatusPage() {
           <div className="bg-white rounded-lg border shadow-sm p-8">
             {/* Status Section */}
             <div className="text-center mb-8">
-              {status?.status === "pending" ? (
+              {status?.status === "processing" ? (
                 <>
                   <div className="flex justify-center mb-4">
                     <Loader2 className="h-16 w-16 text-blue-600 animate-spin" />
@@ -120,7 +120,7 @@ export default function SearchStatusPage() {
                     </span>
                   </div>
                 </>
-              ) : status?.status === "complete" ? (
+              ) : status?.status === "completed" ? (
                 <>
                   <div className="flex justify-center mb-4">
                     <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center">
@@ -170,12 +170,12 @@ export default function SearchStatusPage() {
                   <span className="text-gray-600">Status:</span>
                   <span
                     className={`font-medium ${
-                      status?.status === "complete"
+                      status?.status === "completed"
                         ? "text-green-600"
                         : "text-blue-600"
                     }`}
                   >
-                    {status?.status === "complete" ? "Complete" : "Processing"}
+                    {status?.status === "completed" ? "Complete" : "Processing"}
                   </span>
                 </div>
                 {status?.message && (
@@ -201,7 +201,7 @@ export default function SearchStatusPage() {
           </div>
 
           {/* Help Text */}
-          {status?.status === "pending" && (
+          {status?.status === "processing" && (
             <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-blue-900 mb-2">
                 What&apos;s happening?
