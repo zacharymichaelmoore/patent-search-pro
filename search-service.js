@@ -62,7 +62,8 @@ app.post('/api/search', async (req, res) => {
   }
 
   try {
-    const { userDescription, topK = 100 } = req.body;
+    // LIMITED TO 10 RESULTS FOR TESTING
+    const { userDescription, topK = 10 } = req.body;
     console.log(`[SEARCH] Starting for ${topK} results...`);
     
     const start = Date.now();
@@ -79,7 +80,11 @@ app.post('/api/search', async (req, res) => {
     });
     console.log(`[SEARCH] Found ${searchResults.length} patents in ${Date.now() - start}ms`);
     
-    // Batch analyze
+    // For testing: analyze all 10 at once (no batching needed)
+    const patents = searchResults.map(r => r.payload);
+    const analyzedPatents = await analyzePatentBatch(userDescription, patents);
+    
+    /* PRODUCTION BATCHING (for 100+ results - commented out for testing):
     const analyzedPatents = [];
     const BATCH_SIZE = 10;
     
@@ -90,6 +95,7 @@ app.post('/api/search', async (req, res) => {
       analyzedPatents.push(...analyzed);
       console.log(`[SEARCH] Analyzed ${i + batch.length}/${searchResults.length}`);
     }
+    */
     
     analyzedPatents.sort((a, b) => (b.score || 0) - (a.score || 0));
     
