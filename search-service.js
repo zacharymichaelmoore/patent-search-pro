@@ -63,7 +63,7 @@ app.post('/api/search', async (req, res) => {
 
   try {
     // LIMITED TO 10 RESULTS FOR TESTING
-    const { userDescription, topK = 10 } = req.body;
+    const { userDescription, topK = 100 } = req.body;
     console.log(`[SEARCH] Starting for ${topK} results...`);
     
     const start = Date.now();
