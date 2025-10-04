@@ -194,11 +194,11 @@ export default function Home() {
   const handleBeginSearch = async () => {
     try {
       toast.loading("Starting patent search...");
-      
+
       const response = await fetch("/api/start-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ searchTerms }),
+        body: JSON.stringify({ searchTerms, userDescription: editorContent }),
       });
 
       if (!response.ok) {
@@ -208,15 +208,13 @@ export default function Home() {
 
       const data = await response.json();
       toast.success("Patent search started!");
-      
+
       // Navigate to status page
       router.push(`/search/${data.jobId}`);
     } catch (error) {
       console.error("Error starting search:", error);
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to start patent search"
+        error instanceof Error ? error.message : "Failed to start patent search"
       );
     }
   };
