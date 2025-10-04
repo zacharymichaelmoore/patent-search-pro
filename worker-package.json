@@ -1,0 +1,16 @@
+{
+  "name": "patent-search-worker",
+  "version": "1.0.0",
+  "description": "Cloud Run Job for USPTO patent searches",
+  "main": "get_patents.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node get_patents.js"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.17.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,13 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useDebounce } from "use-debounce";
 import ProvisionalPatentEditor from "@/components/ProvisionalPatentEditor";
-import SearchTermChips from "@/components/SearchTermChips";
+// import SearchTermChips from "@/components/SearchTermChips";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { LogOut } from "lucide-react";
+import markdownToTxt from "markdown-to-text";
+import SearchQueryPreview from "@/components/SearchQueryPreview";
 
 type TermCategory = "deviceTerms" | "technologyTerms" | "subjectTerms";
 
@@ -18,6 +21,7 @@ interface SearchTermsState {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [hasGeneratedDescription, setHasGeneratedDescription] = useState(false);
@@ -46,13 +50,14 @@ export default function Home() {
   // Extract terms whenever debounced content changes
   useEffect(() => {
     const extractAndPreloadTerms = async () => {
-      if (!debouncedContent || debouncedContent.trim().length < 20) {
+      const plainTextContent = markdownToTxt(debouncedContent);
+      if (!plainTextContent || plainTextContent.trim().length < 20) {
         setSearchTerms({
           deviceTerms: [],
           technologyTerms: [],
           subjectTerms: [],
         });
-        setRelatedTermsCache({}); // Clear cache on reset
+        setRelatedTermsCache({});
         return;
       }
 
@@ -62,7 +67,7 @@ export default function Home() {
         const response = await fetch("/api/extract-terms", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ documentText: debouncedContent }),
+          body: JSON.stringify({ documentText: plainTextContent }),
         });
 
         if (!response.ok) throw new Error("Failed to extract terms");
@@ -186,9 +191,34 @@ export default function Home() {
     });
   };
 
-  const handleBeginSearch = () => {
-    toast.info("Prior art search feature coming soon!");
-    console.log("Beginning prior art search with terms:", searchTerms);
+  const handleBeginSearch = async () => {
+    try {
+      toast.loading("Starting patent search...");
+      
+      const response = await fetch("/api/start-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ searchTerms }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to start search");
+      }
+
+      const data = await response.json();
+      toast.success("Patent search started!");
+      
+      // Navigate to status page
+      router.push(`/search/${data.jobId}`);
+    } catch (error) {
+      console.error("Error starting search:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to start patent search"
+      );
+    }
   };
 
   const handleRemoveTerm = (termToRemove: string, category: TermCategory) => {
@@ -277,9 +307,9 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="lg:col-span-2 bg-white rounded-lg border shadow-sm p-6 flex flex-col h-max">
+          <div className="lg:col-span-2 h-fit bg-white rounded-lg border shadow-sm p-6 flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Extracted Search Terms</h2>
+              <h2 className="text-lg font-semibold">Search Query Builder</h2>
               {(isExtractingTerms || isPreloading) && (
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-gray-600 rounded-full"></div>
@@ -287,15 +317,27 @@ export default function Home() {
                 </div>
               )}
             </div>
+
             <div className="flex-1 mb-4">
-              <SearchTermChips
-                terms={searchTerms}
-                onAddTerm={handleAddTerm}
-                onRemoveTerm={handleRemoveTerm}
-                relatedTermsCache={relatedTermsCache}
-                isPreloading={isPreloading}
-              />
+              {hasSearchTerms ? (
+                <SearchQueryPreview
+                  terms={searchTerms}
+                  onAddTerm={handleAddTerm}
+                  onRemoveTerm={handleRemoveTerm}
+                  relatedTermsCache={relatedTermsCache}
+                  isPreloading={isPreloading}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-lg border-2 border-dashed bg-gray-50/50">
+                  <p className="text-center text-sm text-gray-500">
+                    Your interactive search query will be built here
+                    <br />
+                    once terms are extracted from your description.
+                  </p>
+                </div>
+              )}
             </div>
+
             <Button
               onClick={handleBeginSearch}
               disabled={!hasSearchTerms}

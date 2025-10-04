@@ -1,32 +1,25 @@
 # AI Patent Assistant
 
-An AI-powered tool for drafting provisional patents and conducting exhaustive prior art searches.
+An AI-powered tool for drafting provisional patents and conducting exhaustive prior art searches using the USPTO database.
 
-## Features
+## 🎯 Features
 
-- 🤖 AI-assisted provisional patent description generation using Google Gemini
-- 🔍 Real-time keyword extraction for prior art searches
-- 📝 Rich-text editor for patent documentation
-- ☁️ Automated prior art search via Google Compute Engine workers
-- 📊 Comprehensive search results with downloadable reports
+- 🤖 **AI-Assisted Patent Writing** - Generate professional patent descriptions using Google Gemini
+- 🔍 **Intelligent Term Extraction** - Automatically extract device, technology, and subject terms
+- 💡 **Smart Synonym Suggestions** - AI-powered related terms for comprehensive searches
+- 📊 **USPTO Database Search** - Search thousands of patent applications with pagination
+- 📈 **Real-time Status Monitoring** - Track search progress with automatic updates
+- 📥 **CSV Export** - Download comprehensive patent search reports
+- ✨ **Beautiful UI** - Modern, responsive interface with shadcn/ui components
 
-## Tech Stack
-
-- **Frontend:** Next.js 15 (App Router), React, TypeScript
-- **UI Components:** shadcn/ui, TailwindCSS
-- **Rich-Text Editor:** TipTap
-- **AI Model:** Google Gemini
-- **Backend Worker:** Node.js on Google Compute Engine
-- **Cloud Services:** Google Cloud Storage
-- **Deployment:** Vercel
-
-## Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ installed
-- A Google Gemini API key ([Get one here](https://ai.google.dev/))
-- Google Cloud Platform account (for production prior art search features)
+- Node.js 18+
+- Google Gemini API key ([Get one here](https://ai.google.dev/))
+- USPTO API key ([Get one here](https://developer.uspto.gov/))
+- Google Cloud Platform account (for production)
 
 ### Local Development Setup
 
@@ -69,15 +62,37 @@ An AI-powered tool for drafting provisional patents and conducting exhaustive pr
 ### Required for Development
 
 - `GEMINI_API_KEY` - Your Google Gemini API key for AI features
+- `USPTO_API_KEY` - Your USPTO API key for patent searches
 
 ### Required for Production
 
 - `GEMINI_API_KEY` - Google Gemini API key
+- `USPTO_API_KEY` - USPTO API key
 - `GOOGLE_CLOUD_PROJECT_ID` - Your GCP project ID
+- `GOOGLE_CLOUD_LOCATION` - Cloud Run region (default: us-central1)
+- `CLOUD_RUN_JOB_NAME` - Name of the Cloud Run Job (default: patent-search-job)
 - `GOOGLE_CLOUD_STORAGE_BUCKET` - Cloud Storage bucket for search results
 - `GOOGLE_CLOUD_CREDENTIALS` - Service account JSON credentials (as string)
 
 ## Deployment to Vercel
+
+### Prerequisites: Set Up Cloud Run Job
+
+Before deploying to Vercel, you need to set up the serverless worker on Google Cloud.
+Follow the comprehensive guide in **[CLOUD_RUN_SETUP.md](./CLOUD_RUN_SETUP.md)**.
+
+**Quick summary:**
+1. Create Cloud Storage bucket
+2. Create service accounts with permissions
+3. Build and push Docker container
+4. Create Cloud Run Job
+5. Test the job
+
+**Why Cloud Run Jobs?**
+- ✅ **95% cost savings** vs running a VM 24/7
+- ✅ **Serverless** - no infrastructure to manage
+- ✅ **Auto-scaling** - handles multiple searches
+- ✅ **Pay per execution** - only charged when running
 
 ### Step 1: Connect Your Repository
 
@@ -92,7 +107,10 @@ In your Vercel project settings, add these environment variables:
 | Variable | Value | Description |
 |----------|-------|-------------|
 | `GEMINI_API_KEY` | `your_key_here` | Google Gemini API key |
+| `USPTO_API_KEY` | `your_key_here` | USPTO API key for patent searches |
 | `GOOGLE_CLOUD_PROJECT_ID` | `your_project_id` | GCP Project ID |
+| `GOOGLE_CLOUD_LOCATION` | `us-central1` | Cloud Run region |
+| `CLOUD_RUN_JOB_NAME` | `patent-search-job` | Name of your Cloud Run Job |
 | `GOOGLE_CLOUD_STORAGE_BUCKET` | `your_bucket_name` | Storage bucket name |
 | `GOOGLE_CLOUD_CREDENTIALS` | `{"type":"service_account",...}` | Service account JSON (entire object as string) |
 
