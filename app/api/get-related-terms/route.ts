@@ -1,10 +1,13 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 
 // This function will be called for each individual term in the batch.
-async function getSynonymsForTerm(model: any, term: string): Promise<string[]> {
+async function getSynonymsForTerm(
+  model: GenerativeModel,
+  term: string
+): Promise<string[]> {
   try {
-    const prompt = `Generate 5-7 technical synonyms or closely related phrases for the patent search term: "${term}".
+    const prompt = `Generate 3-5 technical synonyms or closely related phrases for the patent search term: "${term}".
     Your response MUST be a single, valid JSON array of strings and nothing else.
     Do not include the original term in the list. Do not include markdown or explanations.`;
 
