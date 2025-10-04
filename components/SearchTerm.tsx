@@ -83,7 +83,7 @@ export function SearchTerm({
         <div className="space-y-2">
           <h4 className="font-medium leading-none">Related Terms</h4>
           <p className="text-sm text-muted-foreground">
-            Synonyms and alternatives for "{term}".
+            Synonyms and alternatives for &quot;{term}&quot;.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 mt-4">
