@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
   let documentText: string | null = null;
-  
+
   try {
     const body = await request.json();
     documentText = body.documentText;
@@ -16,7 +16,6 @@ export async function POST(request: NextRequest) {
 
     // Don't process very short text
     if (documentText.trim().length < 20) {
-      // Clear sensitive data before returning
       documentText = null;
       return Response.json({
         deviceTerms: [],
@@ -25,87 +24,52 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
-    const documentLength = documentText.length;
+    const VM_URL = process.env.PATENT_SEARCH_VM_URL || "http://localhost:8080";
+    const VM_AUTH_SECRET = process.env.VM_AUTH_SECRET;
 
-    const systemPrompt = `You are an expert at analyzing patent documents and extracting relevant search terms for prior art searches.
+    if (!VM_AUTH_SECRET) {
+      throw new Error("VM_AUTH_SECRET not configured");
+    }
 
-Analyze the following patent description and extract three types of search terms:
+    console.log(
+      `Processing document of length: ${documentText.length} characters`
+    );
 
-1. **Device Terms**: Physical devices, apparatus, systems, or products mentioned (e.g., "smartphone", "sensor", "battery")
-2. **Technology Terms**: Technologies, methods, processes, or technical concepts (e.g., "machine learning", "encryption", "wireless communication")
-3. **Subject Terms**: Application domains, use cases, or fields of application (e.g., "healthcare", "automotive", "home automation")
-
-Rules:
-- Extract 3-8 terms for each category
-- Use specific, searchable terms (not generic words like "invention" or "device")
-- Terms should be relevant for patent database searches
-- Return ONLY valid JSON, no markdown, no explanations
-- Format: {"deviceTerms": ["term1", "term2"], "technologyTerms": ["term1", "term2"], "subjectTerms": ["term1", "term2"]}
-
-Patent Description:
-${documentText}
-
-Return the extracted terms as JSON:`;
-
-    console.log(`Processing document of length: ${documentLength} characters`);
-
-    // Call Ollama API
-    const response = await fetch(`${OLLAMA_URL}/api/generate`, {
+    // Call VM API
+    const response = await fetch(`${VM_URL}/api/extract-terms`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "llama3.1:8b",
-        prompt: systemPrompt,
-        stream: false,
-        format: "json", // This tells Ollama to enforce JSON output
-      }),
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-auth-token": VM_AUTH_SECRET,
+      },
+      body: JSON.stringify({ documentText }),
     });
 
-    // Clear sensitive data immediately after sending to Ollama
+    // Clear sensitive data immediately after sending to VM
     documentText = null;
 
     if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.status}`);
+      throw new Error(`VM API error: ${response.status}`);
     }
 
-    const data = await response.json();
-    let cleanedText = data.response.trim();
+    const terms = await response.json();
 
-    // Clean up the response - remove markdown code blocks if present
-    if (cleanedText.startsWith("```json")) {
-      cleanedText = cleanedText.replace(/```json\n?/, "").replace(/```\n?$/, "");
-    } else if (cleanedText.startsWith("```")) {
-      cleanedText = cleanedText.replace(/```\n?/, "").replace(/```\n?$/, "");
-    }
-
-    // Parse the JSON response
-    const terms = JSON.parse(cleanedText);
-
-    // Validate the structure
-    if (
-      !terms.deviceTerms ||
-      !terms.technologyTerms ||
-      !terms.subjectTerms ||
-      !Array.isArray(terms.deviceTerms) ||
-      !Array.isArray(terms.technologyTerms) ||
-      !Array.isArray(terms.subjectTerms)
-    ) {
-      throw new Error("Invalid response structure from AI");
-    }
-
-    console.log(`Successfully extracted ${terms.deviceTerms.length + terms.technologyTerms.length + terms.subjectTerms.length} terms`);
+    console.log(
+      `Successfully extracted ${
+        terms.deviceTerms.length +
+        terms.technologyTerms.length +
+        terms.subjectTerms.length
+      } terms`
+    );
 
     return Response.json(terms);
   } catch (error) {
-    // Log error without exposing sensitive data
-    console.error("Error extracting terms:", error instanceof Error ? error.message : error);
-    return Response.json(
-      { error: "Failed to extract terms" },
-      { status: 500 }
+    console.error(
+      "Error extracting terms:",
+      error instanceof Error ? error.message : error
     );
+    return Response.json({ error: "Failed to extract terms" }, { status: 500 });
   } finally {
-    // Ensure documentText is always cleared
     documentText = null;
   }
 }
