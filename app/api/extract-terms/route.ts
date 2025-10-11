@@ -1,9 +1,11 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
+  let documentText: string | null = null;
+  
   try {
-    const { documentText } = await request.json();
+    const body = await request.json();
+    documentText = body.documentText;
 
     if (!documentText || typeof documentText !== "string") {
       return Response.json(
@@ -14,6 +16,8 @@ export async function POST(request: NextRequest) {
 
     // Don't process very short text
     if (documentText.trim().length < 20) {
+      // Clear sensitive data before returning
+      documentText = null;
       return Response.json({
         deviceTerms: [],
         technologyTerms: [],
@@ -21,16 +25,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return Response.json(
-        { error: "GEMINI_API_KEY is not configured" },
-        { status: 500 }
-      );
-    }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
+    const documentLength = documentText.length;
 
     const systemPrompt = `You are an expert at analyzing patent documents and extracting relevant search terms for prior art searches.
 
@@ -52,12 +48,31 @@ ${documentText}
 
 Return the extracted terms as JSON:`;
 
-    const result = await model.generateContent(systemPrompt);
-    const response = await result.response;
-    const text = response.text();
+    console.log(`Processing document of length: ${documentLength} characters`);
+
+    // Call Ollama API
+    const response = await fetch(`${OLLAMA_URL}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "llama3.1:8b",
+        prompt: systemPrompt,
+        stream: false,
+        format: "json", // This tells Ollama to enforce JSON output
+      }),
+    });
+
+    // Clear sensitive data immediately after sending to Ollama
+    documentText = null;
+
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    let cleanedText = data.response.trim();
 
     // Clean up the response - remove markdown code blocks if present
-    let cleanedText = text.trim();
     if (cleanedText.startsWith("```json")) {
       cleanedText = cleanedText.replace(/```json\n?/, "").replace(/```\n?$/, "");
     } else if (cleanedText.startsWith("```")) {
@@ -79,12 +94,18 @@ Return the extracted terms as JSON:`;
       throw new Error("Invalid response structure from AI");
     }
 
+    console.log(`Successfully extracted ${terms.deviceTerms.length + terms.technologyTerms.length + terms.subjectTerms.length} terms`);
+
     return Response.json(terms);
   } catch (error) {
-    console.error("Error extracting terms:", error);
+    // Log error without exposing sensitive data
+    console.error("Error extracting terms:", error instanceof Error ? error.message : error);
     return Response.json(
       { error: "Failed to extract terms" },
       { status: 500 }
     );
+  } finally {
+    // Ensure documentText is always cleared
+    documentText = null;
   }
 }
